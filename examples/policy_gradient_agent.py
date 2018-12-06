@@ -95,13 +95,13 @@ class PassOrBidNet(nn.Module):
             x = l_h(x)
             x = F.relu(x)
         x1 = self.l_out_pass(x)
-        p_pass = F.sigmoid(x1)
+        p_pass = torch.sigmoid(x1)
         x2 = self.l_out_bid(x)
         p_bid = (1 - p_pass) * F.softmax(x2, dim=-1)
         pi = torch.cat((p_pass, p_bid), -1)
         
         return pi
-        
+    
 def torch_to_numpy(tensor):
     return tensor.data.numpy()
     
@@ -132,7 +132,7 @@ class PolicyGradientNNAgent:
         # if trainable is changed to false, the model won't be updated
         self.trainable = True
         
-    def move(self, o, invalid_moves=[], display=False):
+    def act(self, o, env=None, display=False):
         
         # feed observation as input to net to get distribution as output
         x = self.obs_to_input(o)
@@ -144,7 +144,8 @@ class PolicyGradientNNAgent:
             raise Exception("nan value in move distribution")
         
         # sample action from distribution with invalid moves excluded
-        pi[invalid_moves] = 0
+        if env:
+            pi[env.invalid_moves()] = 0
         pi = pi / np.sum(pi)
         a = np.random.choice(np.arange(len(pi)), p=pi)
         
@@ -252,7 +253,7 @@ def play(agents, verbose=False):
         curr_agent = agents[info['cur_player']]
         if verbose: env.show_turn(True)
             
-        action = curr_agent.move(obs, env.invalid_moves(), display=verbose)
+        action = curr_agent.act(obs, env, display=verbose)
         obs, reward, done, info = env.step(action)
         if verbose: env.render()
         if verbose and done: env.show_result(True)
@@ -279,9 +280,9 @@ def train_vs_self(iterations, episodes, verbose=False):
     D_out = MAX_BID + 1
     params = n_layers, D_in, D_h, D_out
     
-    new_model = nLayerNet
+    new_model = PassOrBidNet
     new_agent = lambda : PolicyGradientNNAgent(new_model, params, obs_to_input, \
-                                               lr=1e-3, df=0.01)
+                                               lr=1e-3, df=0.5)
     
     # initialize game and models for each agent
     env = BridgeEnv()
@@ -346,7 +347,7 @@ def train_vs_self(iterations, episodes, verbose=False):
                     curr_agent = current_agents[info['cur_player']]
                     if verbose: env.show_turn(True)
                         
-                    action = curr_agent.move(obs, env.invalid_moves())
+                    action = curr_agent.act(obs, env)
                     obs, reward, done, info = env.step(action)
                     if verbose: env.render()
                     if verbose and done: env.show_result(True)
@@ -372,7 +373,7 @@ def train_vs_self(iterations, episodes, verbose=False):
 
 class PassAgent:
     
-    def move(self, obs, invalid_moves=[], display=False):
+    def act(self, obs, env=None, display=False):
         if display: print("PassAgent always passes")
         return PASS
     
@@ -398,7 +399,7 @@ def train_vs_pass(iterations, episodes, verbose=False):
     
     new_model = PassOrBidNet
     new_agent = lambda : PolicyGradientNNAgent(new_model, params, obs_to_input, \
-                                               lr=1e-3, df=0.99)
+                                               lr=1e-3, df=0.5)
     
     # initialize game and models for each agent
     env = BridgeEnv()
@@ -460,7 +461,7 @@ def train_vs_pass(iterations, episodes, verbose=False):
                     curr_agent = current_agents[info['cur_player']]
                     if verbose: env.show_turn(True)
                         
-                    action = curr_agent.move(obs, env.invalid_moves())
+                    action = curr_agent.act(obs, env)
                     obs, reward, done, info = env.step(action)
                     if verbose: env.render()
                     if verbose and done: env.show_result(True)
@@ -477,7 +478,7 @@ def train_vs_pass(iterations, episodes, verbose=False):
     n_games = iterations * episodes * len(teams)
     print("\nTraining complete")
     print("Total time for %d games: %.3f s" % (n_games, end - start))
-    print("Game rate = %.0f games/s" % (n_games / (end - start)))
+    print("Game rate = %.0f games/s\n" % (n_games / (end - start)))
     
     return copy_agents()
     
@@ -485,7 +486,7 @@ if __name__ == '__main__':
     
     iterations = 100
     episodes = 1000
-    trained_agents = train_vs_pass(iterations, episodes, verbose=False)
+    trained_agents = train_vs_self(iterations, episodes, verbose=False)
     
     n_games = 5
     
