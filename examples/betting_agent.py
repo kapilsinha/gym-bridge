@@ -17,9 +17,17 @@ class BettingAgent(object):
 
         team_bid = None
         if self.name in ['West', 'North']:
-            return env.state.get_points(self.name) + 20
+            points = env.state.get_points(self.name) + 3
+            if points > last and points > second_last and points > third_last:
+                return points
+            else:
+                return PASS
         elif self.name in ['East', 'South']:
-            return second_last - 20 + env.state.get_points(self.name)
+            points = second_last - 3 + env.state.get_points(self.name)
+            if points > last and points > second_last and points > third_last:
+                return points
+            else:
+                return PASS
         else:
             return PASS
 
